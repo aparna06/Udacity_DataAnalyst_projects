@@ -1,0 +1,58 @@
+---
+title: "DataVis_AR_01192019"
+author: "Aparna Radhakrishnan"
+date: "1/19/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Exploring the Baseball dataset
+### Reading in the dataset
+```{r baseball_data}
+data<-read.table("baseball_data.csv",stringsAsFactors = F,header=T,sep=",")
+head(data)
+```
+
+### Converting height to meters and weight to kg and computing BMI
+```{r}
+data$height_meters<-data$height*0.0254
+data$weight_kg<-data$weight*0.453592
+data$bmi<-data$weight_kg/(data$height_meters^2)
+head(data)
+```
+
+### Exploratory plot & sketch 
+```{r}
+library(ggplot2)
+ggplot(aes(x=avg,y=HR,size=sqrt(bmi),colour=handedness),data = data) +
+  geom_point(alpha=0.5) +
+  xlab("Average Batting") +
+  ylab("Home Runs")+
+  ggtitle("Average Batting versus Home Runs") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+
+### Sorting data according to the descending order of BMI
+```{r}
+data1=data[order(data$bmi,decreasing = T),]
+head(data1)
+```
+
+### Replotting the sketch after sorting
+```{r}
+ggplot(aes(x=avg,y=HR,size=sqrt(bmi),fill=handedness),data = data1) +
+  geom_point(alpha=0.5,pch=21) +
+  xlab("Average Batting") +
+  ylab("Home Runs") +
+  ggtitle("Average Batting versus Home Runs") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+```{r}
+write.table(data1,file = "baseball_data_final.csv",sep=',',row.names = F)
+```
+

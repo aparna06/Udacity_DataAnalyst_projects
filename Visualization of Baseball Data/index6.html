@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <style>
+      h2 {
+        color: black;
+        text-align: center;
+      }
+
+      circle {
+        stroke: none;
+      }
+
+      div.hands_buttons {
+        position: fixed;
+        top: 5px;
+        left: 50px;
+        text-align: center;
+      }
+
+      div.hands_buttons div {
+        background-color: rgb(128, 0, 0);
+        color: rgb(253, 254, 254);
+        padding: 3px;
+        margin: 7px;
+      }
+    </style>
+
+    <script type="text/javascript">
+
+        // Draw the plot
+        function draw(data) {
+
+        /*
+          D3.js setup code
+        */
+
+            "use strict";
+            var margin = 75,
+                width = 1400 - margin,
+                height = 600 - margin;
+
+
+            d3.select("body")
+              .append("h2")
+              .text("Baseball Players Statistics")
+
+            // creating a tooltip
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden")
+                            .text("");
+
+            //creating svg container
+            var svg = d3.select("body")
+                        .append("svg")
+                        .attr("width", width + margin)
+                        .attr("height", height + margin)
+                        .append('g')
+                        .attr('class','chart');
+
+            // Find range of avg column
+            var avg_extent = d3.extent(data, function(d) {
+                            return d['avg'];
+                          });
+
+            // Find range of HR column
+            var HR_extent = d3.extent(data, function(d) {
+                            return d['HR'];
+                          });
+
+            // Create x-axis scale mapping avg -> pixels
+            var avg_scale = d3.scale.linear()
+                              .range([margin, width])
+                              .domain(avg_extent);
+
+            var avg_axis = d3.svg.axis()
+                             .scale(avg_scale);
+
+            // Text label for the x axis
+            d3.select("svg")
+              .append("text")
+              .attr("x", 700 )
+              .attr("y", 575 )
+              .style("text-anchor", "middle")
+              .text("Batting Average")
+
+
+            // Create y-axis scale mapping HR -> pixels
+            var HR_scale = d3.scale.linear()
+                             .range([height, margin])
+                             .domain(HR_extent);
+
+            var HR_axis = d3.svg.axis()
+                            .scale(HR_scale)
+                            .orient("left");
+
+            // Text label for the y axis
+            d3.select("svg")
+              .append("text")
+              .attr("x", -270)
+              .attr("y", 25)
+              .attr("transform", "rotate(-90)")
+              .style("text-anchor","middle")
+              .text("Home Runs")
+
+            // Create scale and mapping for radius dependent on BMI range
+            var circleExtent= d3.extent(data, function(d) {
+                            return d['bmi'];
+                          });
+
+            var circleScale =d3.scale.sqrt()
+                              .range([3,15])
+                              .domain(circleExtent);
+
+            // Add x-axis
+            svg.append("g")
+              .attr("class", "x axis")
+              .attr("transform", "translate(0," + height + ")")
+              .call(avg_axis);
+
+            // Add y-axis
+            d3.select("svg")
+              .append("g")
+              .attr("class", "y axis")
+              .attr("transform", "translate(" + margin + ",0)")
+              .call(HR_axis);
+
+          // function for drawing legend
+          function draw_legend(){
+            var legend = d3.select("svg")
+                           .append('g')
+                           .attr('class','legend')
+                           .attr('transform',  "translate(" + (width-100) +"," + 20 +")")
+                           .selectAll('g')
+                           .data(["Left-handed","Right-handed","Both"])
+                           .enter().append('g');
+
+            legend.append("circle")
+                  .attr("cy",function(d,i){
+                    return i*30;
+                  })
+                  .attr("opacity",0.4)
+                  .attr("fill",function(d){
+                    if(d=="Left-handed"){
+                      return 'red';
+                    }
+                    else if (d=="Right-handed")
+                    {
+                      return 'blue';
+                    }
+                    else{
+                      return 'green';
+                    }
+                  })
+                  .attr('r',8)
+
+
+              legend.append('text')
+                  .attr("y", function(d,i){
+                    return i * 30 +5;
+                  })
+                  .attr("x", 10)
+                  .text(function(d){
+                    return d
+                  });
+
+              var legend2 = d3.select("svg")
+                             .append('g')
+                             .attr('class','legend')
+                             .attr('transform',  "translate(" + (width-100) +"," + 120 +")")
+                             .selectAll('g')
+                             .data([d3.format(".2f")(circleExtent[0]),
+                               d3.format(".2f")(d3.sum(circleExtent,function(d){
+                                 return d})/2),
+                               d3.format(".2f")(circleExtent[1])])
+                             .enter().append('g');
+
+              legend2.append('circle')
+                             .attr("cy",function(d,i){
+                               return (i*35);
+                             })
+                             .attr("opacity",0.8)
+                             .attr("fill","black")
+                             .attr('r',circleScale);
+
+                    legend2.append('text')
+                             .attr("y", function(d,i){
+                               return i*35+5;
+                             })
+                             .attr("x", 20)
+                             .text(function(d){
+                               return "BMI="+d
+                             });
+          }
+
+          draw_legend()
+
+          var circles = svg.selectAll("circle")
+                            .data(data)
+                            .enter().append("circle")
+                            .attr("class", "enter")
+                            .attr("opacity",0.4)
+                            .attr("cx", function(d) {
+                              return avg_scale(d["avg"]);
+                            })
+                            .attr("cy", function(d) {
+                              return HR_scale(d["HR"]);
+                            })
+                            .attr('r', function(d) {
+                              return circleScale(d['bmi']);})
+                            .attr('fill',function(d) {
+                                if (d.handedness==="R") {return 'blue';}
+                                else if (d.handedness==="L") {return 'red';}
+                                else {return 'green'}});
+
+          // Update function
+          function update(data,hand){
+
+            if (hand=="A"){
+              var x= data
+              d3.select('h2')
+                .text("Baseball Players Statistics");
+            }
+            else {
+              var x= data.filter(function(d) {return d.handedness === hand})
+              var notx= data.filter(function(d) {return d.handedness != hand})
+              if (hand=="L"){
+                d3.select('h2')
+                  .text("Baseball Players Statistics (Left Handed)");
+              }
+              else if (hand=="R") {
+                d3.select('h2')
+                  .text("Baseball Players Statistics (Right Handed)");
+              }
+              else {
+                d3.select('h2')
+                  .text("Baseball Players Statistics (Both)");
+              }
+            }
+
+
+            d3.select("svg").selectAll("circle").remove()
+
+            var circles=d3.select("svg")
+              .selectAll("circle")
+              .data(x).enter().append("circle")
+
+            circles.transition()
+              .duration(500)
+              .attr("class", "enter")
+              .attr("opacity",0.4)
+              .attr("cx", function(d) { return avg_scale(d["avg"]); } )
+              .attr("cy", function(d) { return HR_scale(d["HR"]); })
+              .attr('r', function(d) {
+                 return circleScale(d['bmi']);})
+              .attr('fill',function(d) {
+                       if (d.handedness==="R") {return 'blue';}
+                       else if (d.handedness==="L") {return 'red';}
+                       else {return 'green'}})
+
+            draw_legend();
+
+            circles.on("mouseover", function(d){
+              tooltip.text(d.name+", (BMI="+d3.format(".2f")(d.bmi)+")")
+              return tooltip.style("visibility", "visible");})
+                   .on("mousemove", function(){
+                     return tooltip.style("top",
+(d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");})
+                  .on("mouseout", function(){
+                    return tooltip.style("visibility", "hidden");});
+
+            return circles;
+          };
+
+          var hands= ['L','R','B'];
+
+          var hand_idx=0;
+          var hand_interval = setInterval(function(){
+            update(data,hands[hand_idx]);
+
+            hand_idx++;
+
+            if(hand_idx>(hands.length-1)){
+              clearInterval(hand_interval);
+
+              alert("Please click Red buttons (top left) to look at the data.")
+
+              var buttons = d3.select('body')
+                              .append('div')
+                              .attr('class','hands_buttons')
+                              .selectAll('div')
+                              .data(["Left","Right","Both","All"])
+                              .enter()
+                              .append("div")
+                              .text(function(d) { return d;});
+
+              buttons.on("click",function(d){
+                if (d=="Left") {var hand="L";}
+                else if (d=="Right") {var hand="R";}
+                else if (d=="Both") {var hand="B";}
+                else if (d=="All") {var hand="A"}
+
+                d3.select(".hands_buttons")
+                  .selectAll('div')
+                  .transition()
+                  .duration(2500)
+                  .style('color','white')
+                  .style('background','rgb(128, 0, 0)');
+
+                d3.select(this)
+                  .transition()
+                  .duration(2500)
+                  .style("background","lightBlue")
+                  .style("color","black");
+
+                circles=update(data,hand);
+
+              })
+            }
+          },1000);
+          };
+        </script>
+    </head>
+  <body>
+    <script type="text/javascript">
+    /*
+      Use D3 (not dimple.js) to load the TSV file
+      and pass the contents of it to the draw function
+      */
+    d3.csv("baseball_data_final.csv", function(d) {
+        // transform data
+        d['avg'] = +d['avg'];
+        d['HR'] = +d['HR'];
+        return d}, draw);
+    </script>
+  </body>
+  </html>
