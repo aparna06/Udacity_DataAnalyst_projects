@@ -1,1 +1,26 @@
+README
+------
 
+CSV files:
+  MyMapNodeTags.csv - the node tags
+  MyMapNodes.csv - the nodes
+  MyMapWays.csv - the ways
+  MyMapWaysNodes.csv - the ways nodes
+  MyMapWaysTags.csv - the ways tags
+
+OpenStreetMap Case Study.pdf - PDF of the project
+
+Python modules:
+  audit_phone.py - audit and create dictionary of phone
+  audit_street_names.py - audit and create dictionary for unexpected street names
+  audit_zipcode.py - audit and dictionary of zipcodes that need updating
+  update_XML.py - updates the XML  
+  get_attributes.py - populate attributes into dictionary and create csv
+  sampling.py - the script that creates the sample.osm
+
+db_map.db - the database created with the above csv files
+
+OSM files
+  map.osm - the map downloaded from OpenStreetMap
+  output.osm - the updated osm file
+  sample.osm - the sample osm file
