@@ -1,0 +1,2213 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+Housing Prices (Kaggle) by Aparna Radhakrishnan
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+housing <- read.table(file="housing_train.csv",stringsAsFactors = TRUE, header=TRUE,sep=",")
+head(housing)
+```
+
+This is the USA Housing dataset - training data - that was downloaded from the Kaggle website (https://www.kaggle.com/gpandi007/usa-housing-dataset). The data contains different sale prices for houses in USA. 
+
+```{r}
+dim(housing)
+```
+
+The data contained 79 attributes (other than id and sale price) for 1460 houses.
+
+```{r}
+summary(housing)
+```
+
+---------------------------------------------------------------------------
+
+# Univariate Plots Section
+#### Distribution of Sale Prices
+A look at the distribution of Sale Prices.
+```{r echo=FALSE, Univariate_Plots}
+ggplot(aes(SalePrice),data=housing) +
+  geom_histogram(bins=60,fill="darkslateblue",col="black") +
+  scale_x_continuous(breaks=seq(0,600000,by=100000)) +
+  xlab("Sale Price") +
+  ylab("Count") +
+  ggtitle("Distribution of Sale Price") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) 
+```
+
+The distribution is right skewed and it seemed appropriate to carry out a log transformation. The next plot looks at the distribution of the log transformed prices.
+
+```{r}
+ggplot(aes(SalePrice),data=housing) +
+  geom_histogram(binwidth = 0.05,fill="darkslateblue",col="black") +
+  scale_x_continuous(breaks=seq(0,500000,by=100000), trans="log10") +
+  xlab("Sale Price") +
+  ylab("Count") +
+  ggtitle("Distribution of log transformed Sale Price") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+The log transformed distribution follows an almost normal distribution. Thus for further analyses, I decided to use the log-transformed sale prices.
+
+#### MSSubClass and MSZoning
+MSSubClass defines the type of dwelling and MSZoning identifies the general zoning in the sale.
+
+```{r}
+p1<-ggplot(aes(as.factor(MSSubClass)),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Type of Dwelling") +
+  ylab("Count") +
+  ggtitle("Type of Dwelling of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2<-ggplot(aes(as.factor(MSZoning)),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Zoning") +
+  ylab("Count") +
+  ggtitle("General Zoning Classification of the Houses sold") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"),
+        axis.text.x = element_text(angle=90,hjust = 1)) +
+  scale_x_discrete(labels=c("Commercial", "Floating Village Residential",
+                            "Residential High Density", 
+                            "Residential Low Density",
+                            "Residential Medium Density"))
+
+grid.arrange(p1,p2, nrow=1)
+```
+
+The classes for the MSSubClass is available in the annex. MSSubClass is a combination of YearBuilt, HouseStyle and BldgType. Since it is a combination, I will be ignoring this variable for further analyses.
+
+The MSZoning plot shows that most of the houses sold were of Residential Low Density zoning. Thus, I won't be considering this variable either for further analyses. 
+
+
+#### Plots for data on Lot variables - LotFrontage, LotArea, LotShape & LotConfig
+LotFrontage is the linear feet of street connected to property. LotArea is the size of the lot sold in square feet. LotShape describes the shape of the lot in terms of regularity. LotConfig gives the configuration of the lot sold.
+
+```{r}
+p1 <- ggplot(aes(LotFrontage),data=subset(housing,!is.na(LotFrontage)))+
+  geom_histogram(bins=40, fill="darkslateblue",col="black")+
+  xlab("Lot Frontage (ft.)") +
+  ylab("Count") +
+  ggtitle("Distribution of Lot Frontage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) 
+
+p2 <- ggplot(aes(LotArea),data=housing) +
+  geom_histogram(bins=30,fill="darkslateblue",col="black")+
+  xlab("Lot Area (sq. ft.") +
+  ylab("Count") +
+  ggtitle("Distribution of Lot Area") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p3 <- ggplot(aes(LotShape),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Shape") +
+  ylab("Count") +
+  ggtitle("Shape of Property") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"),
+        axis.text.x = element_text(angle=15,hjust = 1)) +
+  scale_x_discrete(labels=c("Slightly Irregular", "Moderately Irregular", 
+                            "Irregular", "Regular"))
+
+p4 <- ggplot(aes(LotConfig), data=housing) +
+  geom_bar(width=1, fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Configuration of Property") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"),
+        axis.text.x = element_text(angle=15,hjust = 1)) +
+  scale_x_discrete(labels=c("Corner lot","Cul-de-sac", 
+                            "Frontage on 2 sides of property",
+                            "Frontage on 3 sides of property", "Inside lot"))
+
+grid.arrange(p1,p2,p3,p4,nrow=2, ncol=2)
+```
+
+The LotFrontage plot shows a right tailed distribution which is similar to sale price distribution. This requires further analyses.
+
+The LotArea plot shows a very long tailed distribution but doesn't really explain much. I decided to create a new variable categorising the data in the next section.
+
+As expected most of the houses had a lot shape were regular. Just to explore the effect of the shape, I will be considering this for further analyses.
+
+Most of the properties sold were on the inside lot. Again to explore the lot configuration, I will be considering this for further analyses.
+
+```{r}
+summary(housing$LotArea)
+
+#Categorising lot area in to 5 groups
+housing$LotAreaCat=cut(housing$LotArea, breaks=c(0,5000,10000,15000,25000,
+                                                 300000), 
+                       labels =c("<5000", "5000-10000", "10000-15000", 
+                                 "15000-25000", ">25000"))
+
+ggplot(aes(LotAreaCat),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Lot Area Category (sq. ft.)") +
+  ylab("Count") +
+  ggtitle("Categorised Distribution of Lot Area") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) 
+```
+
+This plot looks more interesting and there could be a relationship of sale price with this variable.
+
+#### Street and Alley data for the property sold.
+Street gives type of road access and Alley describes the type of alley access to the property.
+```{r}
+p1 <- ggplot(aes(Street),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Street Type") +
+  ylab("Count") +
+  ggtitle("Street Type of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) +
+  scale_x_discrete(labels=c("Gravel","Paved"))
+
+p2 <- ggplot(aes(Alley),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Alley Type") +
+  ylab("Count") +
+  ggtitle("Alley Type of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) +
+  scale_x_discrete(labels=c("Gravel","Paved","Not Available"))
+
+grid.arrange(p1,p2,nrow=1)
+```
+
+As most houses have a Paved Street and don't have an alley, these variables will not be considered for further analyses.
+
+#### Properties of the Land - LandContour & LandSlope
+LandContour describes the flatness of the property and LandSlope dercibes the slope.
+
+```{r}
+p1 <- ggplot(aes(LandContour),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Flatness of Property") +
+  ylab("Count") +
+  ggtitle("Flatness of Property of the Houses sold") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"),
+        axis.text.x = element_text(angle=15,hjust = 1)) + 
+  scale_x_discrete(labels=c("Banked", "Hillside", "Low", "Near Flat / Level"))
+
+p2 <- ggplot(aes(LandSlope),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Slope of Property") +
+  ylab("Count") +
+  ggtitle("Flatness of Property of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) +
+  scale_x_discrete(labels=c("Gentle","Moderate","Severe"))
+
+grid.arrange(p1,p2,nrow=1)
+```
+
+Most of the houses were on near flat or level land and most properties had a gentle slope. So I will not be considering these for further analyses.
+
+#### Utilities and Conditions near the property
+Utilities describe the types available and Conditions describe proximity to various conditions.
+
+```{r}
+p1 <- ggplot(aes(Utilities),data=housing)+
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Utilities") +
+  ylab("Count") +
+  ggtitle("Utilities on the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) +
+  scale_x_discrete(labels=c("All","Electricity & Gas Only"))
+
+p2 <- ggplot(aes(Condition1),data=housing) +
+  geom_bar(width=1,col="black",fill="darkslateblue") +
+  xlab("Condition 1") +
+  ylab("Count") +
+  ggtitle("Condition 1 of  the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+  
+p3 <- ggplot(aes(Condition2),data=housing) +
+  geom_bar(width=1,col="black",fill="darkslateblue") +
+  xlab("Condition 2") +
+  ylab("Count") +
+  ggtitle("Condition 2 of  the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,p3,nrow=3,ncol=1)
+``` 
+
+All these variables will be ignored from further analyses as there is not any variation in the data. Further description of the different conditions can be found in the annex.
+
+#### Neighborhood
+Neighborhood describes the physical locations within Ames city limits
+
+```{r} 
+ggplot(aes(Neighborhood),data=housing) +
+  geom_bar(fill=rainbow(25),width=1,col="black") +
+  scale_x_discrete(limit=levels(aes(Neighborhood)), 
+                   labels=c("Bloomington Heights", "Bluestem", "Briardale",
+                            "Brookside", "Clear Creek", "College Creek",
+                            "Crawford", "Edwards", "Gilbert", 
+                            "Iowa DOT and Rail Road", "Meadow Village", 
+                            "Mitchell", "North Ames", "Northridge",
+                            "Northpark Villa", "Northridge Heights", 
+                            "Northwest Ames", "Old Town", 
+                            "South & West of Iowa State University",
+                            "Sawyer", "Sawyer West", "Somerset", "Stone Brook",
+                            "Timberland", "Veenker"))+
+  xlab("Neighborhood") +
+  ylab("Count") +
+  ggtitle("Neighborhood of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),  axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+```
+
+It will be interesting to see the effect of the different neighborhoods in terms of age and sale price. I hypothesize that the newer neighborhoods would have a higher sale price in comparison to the older neighborhoods.
+
+#### BldgType & HouseStyle
+BldgType describes the type of dwelling while HouseStyle describes the style.
+
+```{r}
+p1<-ggplot(aes(BldgType),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Building Type") +
+  ylab("Count") +
+  ggtitle("Building Type of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=15,hjust=0.5,vjust=1)) +
+  scale_x_discrete(labels=c("Single Family", "Two-family Conversion", "Duplex",
+                            "Townhouse End Unit","Townhouse Inside unit"))
+
+p2<-ggplot(aes(HouseStyle),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black")+
+  xlab("House Style") +
+  ylab("Count") +
+  ggtitle("Style of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("One story", 
+                            "One and one-half story: \n 2nd level finished",
+                            "One and one-half story:\n 2nd level unfinished",
+                            "Two story",
+                            "Two and one-half story:\n 2nd level finished",
+                            "Two and one-half story: \n2nd level unfinished",
+                            "Split Foyer", "Split Level"))
+
+grid.arrange(p1,p2,nrow=1,ncol=2)
+```
+
+Most of the houses in this dataset were single family homes. Also to note there were two different categories of townhouses. Although there is not much variation, it will be good to check the effect of the building type on sale price.
+
+The houses were mostly single storey followed by 2 storeyes. I will be ignoring this variable in further analyses.
+
+
+#### OverallQual & OverallCond
+
+OverallQual rates the overall material and finish of the house and OverallCond rates the overall condition.
+
+```{r}
+p1<-ggplot(aes(OverallQual),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black")+
+  scale_x_continuous(breaks=1:10) +
+  xlab("Overall Quality") +
+  ylab("Count") +
+  ggtitle("Overall Quality") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2<-ggplot(aes(OverallCond),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black")+
+  scale_x_continuous(breaks=1:10) +
+  xlab("Overall Condition") +
+  ylab("Count") +
+  ggtitle("Overall Condition") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,nrow=1,ncol=2)
+```
+
+Most of the houses had an Overall Quality of 5 and 50% of the houses were in the range of 5 to 7. While for Overall Condition, most houses were 5. I will be looking at the effect of both these variables with SalePrice.
+
+#### YearBuilt & YearRemodAdd
+YearBuilt is the year the house was built and YearRemodAdd is the year any remodelling or additions happened. If no renovations were done the year would be same for both the variables.
+
+```{r}
+p1<- ggplot(aes(YearBuilt),data=housing)+
+  geom_histogram(binwidth = 5,fill="darkslateblue",col="black") +
+  xlab("Year Built") +
+  ylab("Count")+
+  ggtitle("Year Built") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2<-ggplot(aes(YearRemodAdd),data=housing)+
+  geom_histogram(binwidth = 5, fill="darkslateblue",col="black")+
+  xlab("Year Remodelled") +
+  ylab("Count") +
+  ggtitle("Year Remodelled") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+One would expect the older houses to cost less but since the data looks mainly at 2000-2005 built homes and the older homes are likely to have been remodelled, this variable may not be of much significance.
+
+If the houses that were built in the early years were remodelled, that might need to be factored in. 
+
+#### RoofStyle & RoofMatl
+These variables look at the roof style & material.
+```{r}
+print("Roof Material")
+summary(housing$RoofMatl)
+
+print("Roof Style")
+summary(housing$RoofStyle)
+```
+
+I will ignoring these variables as there is not much variation in the results.
+
+#### Exterior1st & Exterior2nd
+These variables categorises the exterior coverings of the houses sold.
+
+```{r}
+p1<- ggplot(aes(Exterior1st),data=housing)+
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count")+
+  ggtitle("First Exterior Covering") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5))+
+  scale_x_discrete(labels=c("Asbestos Shingles","Asphalt Shingles",
+                            "Brick Common","Brick Face","Cinder Block",
+                            "Cement Board","Hard Board","Imitation Stucco", 
+                            "Metal Siding","Plywood","Stone","Stucco",
+                            "Vinyl Siding","Wood Siding","Wood Shingles"))
+
+p2<-ggplot(aes(Exterior2nd),data=housing)+
+  geom_bar(fill="darkslateblue",col="black")+
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Second Exterior Covering") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5))+
+  scale_x_discrete(labels=c("Asbestos Shingles","Asphalt Shingles",
+                            "Brick Common","Brick Face","Cinder Block",
+                            "Cement Board","Hard Board","Imitation Stucco", 
+                            "Metal Siding","Other","Plywood","Stone","Stucco",
+                            "Vinyl Siding","Wood Siding","Wood Shingles"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+These plots shows that the exterior covering is mainly vinyl siding. As there is some variation in the values, I will be checking it's effect with sale price.
+
+#### MasVnrType & MasVnrArea
+These variables describe the masonry veneer type and area.
+
+```{r}
+housing$MasVnrType[which(is.na(housing$MasVnrType))]="None"
+
+p1<- ggplot(aes(MasVnrType),data=housing)+
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count")+
+  ggtitle("Masonry Veneer Type") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Brick Common","Brick Face","None","Stone"))
+
+p2<-ggplot(aes(as.numeric(MasVnrArea)),data=housing)+
+  geom_histogram(fill="darkslateblue",col="black",bins=30)+
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Masonry Veneer Area") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Since most of the houses had no masonry veneer, I shall be ignoring both these variables.
+
+#### ExterQual & ExterCond
+The quality and condition of the exterior for the houses are described in these variables.
+
+```{r}
+p1<- ggplot(aes(ExterQual),data=housing)+
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("Quality") +
+  ylab("Count")+
+  ggtitle("Exterior Quality") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Excellent","Fair","Good","Typical/Average"))
+
+p2<-ggplot(aes(ExterCond),data=housing)+
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("Condition") +
+  ylab("Count")+
+  ggtitle("Exterior Condition") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Excellent","Fair","Good","Poor","Typical/Average"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Although the variation is limited, I would like to see their relationship with sale price and overall quality and condition.
+
+#### Foundation
+Foundation describes the type of foundation of the houses sold.
+```{r}
+ggplot(aes(Foundation),data=housing)+
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count")+
+  ggtitle("Foundation") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Brick & Tile", "Cinder Block", "Poured Concrete", 
+                            "Slab", "Stone", "Wood"))
+```
+
+I wonder if any of these foundations increased the sale price significantly?
+
+#### BsmtQual & BsmtCond
+BsmtQual and BsmtCond describes the quality and condition of the basement (if available) for the houses sold.
+```{r}
+p1 <- ggplot(aes(BsmtQual),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Basement Quality") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Excellent", "Fair", "Good", "Typical", "NA"))
+
+p2 <- ggplot(aes(BsmtCond), data=housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Basement Condition") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Fair", "Good", "Poor", "Typical", "NA"))
+
+grid.arrange(p1,p2,ncol=2)  
+```
+
+I shall keep this variable to see if there's any effect on sale price.
+
+#### BsmtExposure
+BsmtExposure refers to walkout or garden level walls.
+
+```{r}
+ggplot(aes(BsmtExposure), data=housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Basement Exposure") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(angle=90,hjust=0.5,vjust=0.5)) +
+  scale_x_discrete(labels=c("Average", "Good", "Minimum", "None", 
+                            "Not Available"))
+```
+
+I will be ignoring this variable as there is not much variation.
+
+#### BsmtFinType1 & BsmtFinSF1
+Ratings and square footage of Basement Finished Area are described below.
+
+```{r}
+p1 <- ggplot(aes(BsmtFinType1),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finished Basement Type 1") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+  scale_x_discrete(labels=c("Average Living Quarters",
+                            "Below Average Living Quarters",
+                            "Good Living Quarters", "Low Living Quarters",
+                            "Average Rec Room", "Unfinished","NA"))
+
+p2 <- ggplot(aes(BsmtFinSF1), data=housing) +
+  geom_histogram(fill="darkslateblue", col="black",bins = 30) +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finished Basement \n (Type 1) Square Footage ") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)  
+
+```
+
+#### BsmtFinType2 & BsmtFinSF2
+```{r}
+p1 <- ggplot(aes(BsmtFinType2),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finished Basement Type 2") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+  scale_x_discrete(labels=c("Average Living Quarters", 
+                            "Below Average Living Quarters", 
+                            "Good Living Quarters", "Low Living Quarters",
+                            "Average Rec Room", "Unfinished","NA"))
+
+p2 <- ggplot(aes(BsmtFinSF2), data=housing) +
+  geom_histogram(fill="darkslateblue", col="black",bins = 30) +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finished Basement \n (Type 2) Square Footage ") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)  
+```
+
+#### BsmtUnfSF 
+The unfinished square footage of basement.
+```{r}
+ggplot(aes(BsmtUnfSF), data=housing) +
+  geom_histogram(fill="darkslateblue", col="black",bins = 30) +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Unfinished Basement \nSquare Footage ") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+I will be ignoring the square footage as there is a variable with total square footage of the basement which I would like to consider.
+
+I wonder if having living quarters or a rec room in the basement increases the sale price. Therefore I am converting the Finished Basement Types to a new variable called FinBsmt. Also to check if have living quarters over Rec room made a difference to the cost, I added a new variable, LivOrRec.
+
+```{r}
+#creating 2 new variables
+housing$FinBsmt <- TRUE # is the Basement finished?
+
+# is there Living Quarters / Recreation room / both in the basement?
+housing$LivOrRec<-NULL 
+
+
+for (i in 1:nrow(housing))
+{
+  if ((housing$BsmtFinType1[i]=="Unf" | is.na(housing$BsmtFinType1[i]))  & 
+      ( housing$BsmtFinType2[i]=="Unf" | is.na(housing$BsmtFinType2[i])))
+  {
+    housing$FinBsmt[i]<- FALSE
+    housing$LivOrRec[i] <- NA
+  }
+  else 
+  {
+    ind1=na.omit(match(c(as.character(housing$BsmtFinType1[i]), 
+                         as.character(housing$BsmtFinType2[i])), 
+                       c("GLQ", "ALQ", "BLQ", "LwQ")))
+    ind2=na.omit(match(c(as.character(housing$BsmtFinType1[i]),
+                         as.character(housing$BsmtFinType2[i])), "Rec"))
+    
+    if(length(ind1)>=1 & length(ind2)< 1)
+    {
+      housing$LivOrRec[i] <- "LQ"
+    }
+    else if(length(ind2)>=1 & length(ind1)< 1)
+    {
+      housing$LivOrRec[i] <- "Rec"
+    }
+    else if(length(ind1)>=1 & length(ind2)>=1)
+    {
+      housing$LivOrRec[i] <- "Both"
+    }
+  }
+}
+
+p1 <- ggplot(aes(FinBsmt),data=housing)+
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finished Basement?") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2 <- ggplot(aes(LivOrRec), data=housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Living Quarters or Rec Room?") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+I think it would be nice to see the effect of having a living quarters or recreation room on the price.
+
+#### TotalBsmtSF
+```{r}
+ggplot(aes(TotalBsmtSF),data=housing) +
+  geom_histogram(bins=30, fill="darkslateblue", col="black") +
+  xlab("Square Footage") +
+  ylab("Count") +
+  ggtitle("Total Square Footage of Basement") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+#### Heating & HeatingQC
+These variable talk about the type of heating and the quality and condition of the heating.
+
+```{r}
+p1 <- ggplot(aes(Heating),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Type of Heating") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))+
+  scale_x_discrete(labels=c("Floor Furnace","Gas forced warm \n air furnace", 
+                            "Gas hot water or \n steam heat","Gravity furnace",
+                            "Hot water or steam \n heat other than gas",
+                            "Wall furnace"))
+
+p2 <- ggplot(aes(HeatingQC),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Heating QC") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) +
+  scale_x_discrete(labels=c("Excellent", "Fair", "Good" , "Poor",
+                            "Typical / Average"))
+
+grid.arrange(p1,p2,ncol=2)  
+```
+
+Although there is not much variation in the type of heating, I shall keep it to see if there's a change in type dependent on the Year Remodelled. HeatingQC might have an effect on the price of the houses especially if they are sold in the winter months.
+
+#### CentralAir & Electrical
+CentralAir tells whether the house has central air conditioning. Electrical describe the type of electrical system installed.
+
+```{r}
+p1<-ggplot(aes(CentralAir),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Central Air Conditioning?") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+p2 <- ggplot(aes(Electrical),data = housing) +
+  geom_bar(fill="darkslateblue", col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Electrical System") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(angle=90,hjust=1,vjust=0.5)) 
+  
+grid.arrange(p1,p2,ncol=2)
+```
+
+I wonder the effect of central air conditioning on price and the electrical system on the year remodelled.
+
+#### X1stFlrSF & X2ndFlrSF
+These variables give the square footage of the first and second floors.
+```{r}
+p1 <- ggplot(aes(X1stFlrSF), data=housing) +
+  geom_histogram(bins=30, fill="darkslateblue", col="black") +
+  xlab("Square Foot") +
+  ylab("Count") +
+  ggtitle("First Floor Square Footage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1,vjust=0.5))
+
+p2 <- ggplot(aes(X2ndFlrSF), data=housing) +
+  geom_histogram(bins=30, fill="darkslateblue", col="black") +
+  xlab("Square Foot") +
+  ylab("Count") +
+  ggtitle("Second Floor Square Footage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1,vjust=0.5))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+#### LowQualFinSF
+LowQualFinSF gives the Low quality finished square feet (all floors).
+```{r}
+ggplot(aes(LowQualFinSF), data=housing) +
+  geom_histogram(bins=10, fill="darkslateblue", col="black") +
+  xlab("Square Foot") +
+  ylab("Count") +
+  ggtitle("Low Quality Finished Square Footage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1,vjust=0.5))
+```
+
+The above plot does not show much information as most houses had 0 sq ft that was low quality finished. Thus, in the next plot I subsetted the data to those with more than 0 sq ft and looked at the distribution in the form of a box plot.
+
+```{r}
+ggplot(aes(x="",y=LowQualFinSF), data=subset(housing,housing$LowQualFinSF>0)) +
+  geom_boxplot(fill="darkslateblue", col="black") +
+  xlab("")+
+  ylab("Square Foot") +
+  ggtitle("Low Quality Finished Square Footage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1,vjust=0.5))
+```
+
+Since the next variable, GrLivArea is the sum of the above variables (X1stFlrSF, X2ndFlrSF and LowQualFinSF), I will not be considering these variables for the rest of the analyses.
+
+#### GrLivArea (Square Footage)
+Since square footage labelled as "GrLivArea" is probably one of the important factors for the pricing, I plotted its distribution.
+
+```{r}
+ggplot(aes(GrLivArea),data=housing)+
+  geom_histogram(binwidth = 100, fill="darkslateblue",col="black")+
+  xlab("Square Footage") +
+  ylab("Count")+
+  ggtitle("Square Footage for the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+Looking at the distribution, I decided to categorize the variable by binning them in to categories and create a new variable. To understand the distribution, I looked at the summary of the data and then categorised them.
+
+```{r}
+summary(housing$GrLivArea)
+
+#categorising the Living Area in to 5 categories
+housing$LivAreaCat=cut(housing$GrLivArea,breaks =c(0,1100,1500,2000,3000,6000),
+                       labels = c("<1100","1100-1500","1500-2000","2000-3000",
+                                  ">3000"))
+
+```
+
+Looking at the summary, I decided to bin the square footage in to 5 categories: 
+  
+  * <1100
+  * 1100-1500
+  * 1500-2000
+  * 2000-3000
+  * \>3000
+
+
+```{r}
+ggplot(aes(LivAreaCat),data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Square Footage") +
+  ylab("Count") +
+  ggtitle(label="Count of houses sold per Square Footage Category") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+```
+
+#### BsmtFullBath & FullBath
+These variables give the number of full baths above grade in basement and otherwise.
+```{r}
+p1 <- ggplot(aes(BsmtFullBath), data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Number of Full Baths \n in the Basement") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2 <- ggplot(aes(FullBath), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Number of Full Baths \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+#### HalfBath & BsmtHalfBath
+These variables give the number of half baths above grade in basement and otherwise.
+
+```{r}
+p1 <- ggplot(aes(BsmtHalfBath), data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Number of Half Baths \n in the Basement") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2 <- ggplot(aes(HalfBath), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Number of Half Baths \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+I would like to see the effect of the number of baths (full / half) on price but with a new variable "TotalBaths".
+
+```{r}
+#calculating the total number of baths. TotalBaths = FullBath + BsmtFullBath + (0.5 * (HalfBath + BsmtHalfBath))
+housing$TotalBaths <- housing$FullBath + housing$BsmtFullBath + 
+  (0.5* (housing$HalfBath + housing$BsmtHalfBath))
+
+ggplot(aes(as.factor(TotalBaths)), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Number of Total Baths \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+#### BedroomAbvGr & TotRmsAbvGrd
+BedroomAbvGr and TotRmsAbvGrd describe number of bedrooms above grade (does NOT include basement bedrooms) &  total rooms above grade (does not include bathrooms).
+
+```{r}
+p1 <- ggplot(aes(as.factor(BedroomAbvGr)), data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Bedrooms") +
+  ylab("Count") +
+  ggtitle(label="Number of Bedrooms \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2 <- ggplot(aes(as.factor(TotRmsAbvGrd)), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Baths") +
+  ylab("Count") +
+  ggtitle(label="Total Rooms \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Just to see the effect of the number of bedrooms and total rooms above grade on sale price I shall take it to the next analyses.
+
+#### KitchenAbvGr & KitchenQual
+These variables describe the number of kitchens above grade and quality of kitchen.
+
+```{r}
+p1 <- ggplot(aes(KitchenAbvGr), data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number of Kitchens") +
+  ylab("Count") +
+  ggtitle(label="Number of Kitchens \n Above Grade") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2 <- ggplot(aes(KitchenQual), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("") +
+  ylab("Count") +
+  ggtitle(label="Kitchen Quality") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Excellent", "Fair","Good","Typical / Average"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Does having more than one kitchen or quality of kitchen have an effect on price?
+
+#### Functional 
+Functional describes the level of Functionality of the house.
+```{r}
+ggplot(aes(Functional), data=housing) + 
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("") +
+  ylab("Count") +
+  ggtitle(label="Functionality") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Major Deductions 1", "Major Deductions 2",
+                            "Minor Deductions 1","Minor Deductions 2", 
+                            "Moderate Deductions", "Severely Damaged", 
+                            "Typical Functionality"))
+```
+
+I shall ignore this variable as most houses have typical functionality.
+
+#### Fireplaces & FireplaceQu
+These variables describe the number of fireplaces and their quality.
+```{r}
+p1<- ggplot(aes(Fireplaces),data=housing)+
+geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("Number") +
+  ylab("Count") +
+  ggtitle(label="Number of Fireplaces") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"))
+
+p2<- ggplot(aes(FireplaceQu),data=housing)+
+geom_bar(fill="darkslateblue",col="black",width = 1)+
+  xlab("") +
+  ylab("Count") +
+  ggtitle(label="Quality of Fireplaces") +
+  theme(plot.title = element_text(family = "serif", face ="bold.italic"),axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Excellent", "Fair","Good","Poor", "Typical", "NA"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Similar to heating, I wonder if having a fireplace increased the sale price in winter months. I shall be ignoring the fireplace quality.
+
+#### GarageType
+This variable describes the type of garage.
+```{r}
+ggplot(aes(GarageType),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("Garage Type") +
+  ylab("Count") +
+  ggtitle("Garage Type of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),  
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("2 Types", "Attached", "Basement", "Built-in", 
+                            "Car Port", "Detached", "NA"))
+```
+
+Most of the Garage Type was Attached (Attchd) followed by Detached (Detchd). Will the type of garage affect sale price?
+
+#### GarageYrBlt & GarageFinish
+These variables describe the garage was built and its finish.
+```{r}
+p1 <- ggplot(aes(GarageYrBlt),data=subset(housing,subset = !is.na(housing$GarageYrBlt))) +
+  geom_histogram(binwidth = 5,fill="darkslateblue",col="black") +
+  xlab("Year Built") +
+  ylab("Count") +
+  ggtitle("Year the garage was built") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+p2<- ggplot(aes(GarageFinish), data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Finish of the Garage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Finished", "Rough Finished", "Unfinished", "NA"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+It will be interesting to compare the year the garage was built with the year the house was remodelled and the finish of the garage with the sale price.
+
+#### GarageCars & GarageArea
+The number of cars in the garage and the area of the garage are described by GarageCars and GarageArea respectively.
+```{r}
+p1 <- ggplot(aes(GarageCars),data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width=1) +
+  xlab("Number") +
+  ylab("Count") +
+  ggtitle("Number of Cars") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+p2<- ggplot(aes(GarageArea), data=housing) +
+  geom_histogram(bins=15,fill="darkslateblue",col="black") +
+  xlab("Square Footage") +
+  ylab("Count") +
+  ggtitle("Area of the Garage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) 
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Number of cars in the garage and area of the garage could be deciding factors for the sale of a house, I shall be exploring these further.
+
+#### GarageQual & GarageCond
+```{r}
+p1 <- ggplot(aes(GarageQual),data=housing) +
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Quality of the Garage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Excellent", "Fair", "Good", "Poor", 
+                            "Typical/Average", "No Garage"))
+
+p2<- ggplot(aes(GarageCond), data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Condition of the Garage") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Excellent", "Fair", "Good", "Poor", 
+                            "Typical/Average", "No Garage"))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+The plots for these two variables reveal mostly "Typical/Average" and therefore I am not considering them for further analyses.
+
+#### PavedDrive & WoodDeckSF
+```{r}
+p1 <- ggplot(aes(PavedDrive),data=housing) +
+  geom_bar(fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Paved Drive?") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("No", "Partial", "Yes"))
+
+p2<- ggplot(aes(WoodDeckSF), data=housing) +
+  geom_histogram(bins=20,fill="darkslateblue",col="black") +
+  xlab("Square Feet") +
+  ylab("Count") +
+  ggtitle("Wood Deck Square Foot") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+grid.arrange(p1,p2,ncol=2)
+```
+
+Since the variation in these variables are minimal, they will not be considered for further analyses.
+
+#### OpenPorchSF, EnclosedPorch, X3SsnPorch & ScreenPorch 
+Since the porches are not part of all the houses, I have plotted only houses 
+that have square footage greater than 0.
+```{r}
+p1 <- ggplot(aes(x="",y=EnclosedPorch),data=subset(housing,
+                                                   housing$EnclosedPorch>0)) +
+  geom_boxplot(fill="darkslateblue",col="black") +
+  scale_y_log10() +
+  ylab("Square Feet") +
+  xlab("") +
+  ggtitle("Enclosed Porch Square Feet") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) 
+
+p2<- ggplot(aes(x="", y=OpenPorchSF), data=subset(housing,
+                                                  housing$OpenPorchSF>0)) +
+  geom_boxplot(fill="darkslateblue",col="black")+
+  scale_y_log10() +
+  ylab("Square Feet") +
+  xlab("") +
+  ggtitle("Open Porch Square Foot") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+p3 <- ggplot(aes(x="",y=X3SsnPorch),data=subset(housing,housing$X3SsnPorch>0)) +
+  geom_boxplot(fill="darkslateblue",col="black")+
+  scale_y_log10() +
+  ylab("Square Feet") +
+  xlab("") +
+  ggtitle("3 Season Porch Square Feet") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) 
+
+p4<- ggplot(aes(x="",y=ScreenPorch), data=subset(housing,housing$ScreenPorch>0)) +
+  geom_boxplot(fill="darkslateblue",col="black")+
+  scale_y_log10() +
+  ylab("Square Feet") +
+  xlab("") +
+  ggtitle("Screen Porch Square Foot") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+grid.arrange(p1,p2,p3,p4, nrow=2, ncol=2)
+```
+
+The above features will not be considered for further analyses.
+
+#### PoolArea & PoolQC
+```{r}
+p1 <- ggplot(aes(PoolArea),data=subset(housing, housing$PoolArea > 0)) +
+  geom_histogram(bins=10,fill="darkslateblue",col="black") +
+  xlab("Square Feet") +
+  ylab("Count") +
+  ggtitle("Pool Area") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) 
+
+p2<- ggplot(aes(PoolQC), data=subset(housing,housing$PoolQC != "NA")) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Pool Quality") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+grid.arrange(p1,p2,ncol=2)
+
+print(paste("Number of houses with pools = ",sum(table(housing$PoolQC))),sep="")
+```
+
+Since only 7 houses have a pool, I am not considering these variables.
+
+#### Fence
+```{r}
+ggplot(aes(Fence), data=subset(housing,housing$Fence!="No Fence")) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Fence Quality") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("Good Privacy", "Good Wood", "Minimum Privacy", 
+                            "Minimum Wood/Wire"))
+
+print(paste("Percentage of houses with fence=", sum(table(housing$Fence))*100/nrow(housing)))  
+```
+
+Less than 20% of the houses have a fence, thus not considering this feature for further analyses.
+
+#### MiscFeature & MiscVal
+Since miscellaneous features are not present in most houses sold, MiscVal>0 and MiscFeature!=None only considered
+```{r}
+p1 <- ggplot(aes(x="",y=MiscVal),data=subset(housing,housing$MiscVal>0)) +
+  geom_boxplot(fill="darkslateblue",col="black") +
+  scale_y_log10()+
+  xlab("$") +
+  ylab("Count") +
+  ggtitle("Value of Miscellaneous \n Feature") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) 
+
+p2<- ggplot(aes(MiscFeature), data=subset(housing,housing$MiscFeature!="None")) +
+  geom_bar(width=1,fill="darkslateblue",col="black") +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Miscellaneous Feature") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)) +
+  scale_x_discrete(labels=c("2nd Garage","Other","Shed (over 100 SF)", 
+                            "Tennis Court"))
+
+grid.arrange(p1,p2,ncol=2)
+
+```
+
+The above variables will not be considered for further analyses.
+
+#### MoSold & YrSold
+```{r}
+p1<- ggplot(aes(MoSold),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black")+
+  scale_x_continuous(breaks = 1:12,labels = month.abb) +
+  xlab("Month Sold") +
+  ylab("Count")+
+  ggtitle("Month the Houses were sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+p2<- ggplot(aes(YrSold),data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1) +
+  xlab("Year Sold") +
+  ylab("Count") +
+  ggtitle("Year the Houses were sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+grid.arrange(p1,p2, nrow=2)
+
+```
+
+Most sales seem to have happened during the summer months of June and July as expected.
+
+The data is incomplete for 2010. Since the number of houses sold between 2006 and 2009 were similar, this variable should account for the market fluctuation if any in the real estate market and interesting to explore. 
+
+I note that this data may not be real, as in 2008 the real estate is known to have crashed and did not really gain before 2010. This does not show up in the graphs for the number of houses sold during that period. I wonder if it will be obvious when compared to the sale prices during that time.
+
+#### Mo/Year Sold
+```{r}
+#creating a plot that looks at the houses sold for every month / year.
+plot<-ggplot(aes(MoSold),data=housing) +
+  geom_bar(fill="darkslateblue",col="black",width = 1)+
+  scale_x_continuous(breaks = 1:12, labels=month.abb) +
+  theme(axis.text.x=element_text(angle=90,size = 8,vjust=0.2), 
+        plot.title = element_text(family = "serif",face ="bold.italic")) +
+  xlab("Month Sold") +
+  ylab("Count") +
+  ggtitle("Month Sold / Year count")
+plot+facet_wrap(~YrSold,ncol=3)
+```
+
+This plot clearly shows that the 2010 data was only upto beginning of July. Another insight is that June & July are the most popular months for buying. I wonder if the sale prices had any trends during the year.
+
+#### SaleType
+```{r}
+ggplot(aes(SaleType),data=housing) + 
+  geom_bar(width=1, fill="darkslateblue",col="black") +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("Sale Type") +
+  ylab("Count") +
+  ggtitle("Sale Type of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic")) +
+  scale_x_discrete(labels=c("Court Officer Deed/Estate",
+                            "Contract 15% Down payment \n regular terms", 
+                            "Contract Low Down", "Contract Low Interest", 
+                            "Contract Low Down \n payment and low interest",
+                            "Warranty Deed - Cash",
+                            "Home just constructed and sold","Other",
+                            "Warranty Deed - Conventional"))
+```
+
+This variable doesn't have much variation and thus will be ignored.
+
+#### SaleCondition
+```{r}
+ggplot(aes(SaleCondition),data=housing) +
+  geom_bar(width=1,fill="darkslateblue",col="black")+
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +
+  xlab("Sale Condition") +
+  ylab("Count") +
+  ggtitle("Sale Condition of the Houses sold") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))+
+  scale_x_discrete(labels=c("Abnormal", "Adjoining Land Purchase", "Allocation", 
+                            "Family", "Normal", "Partial"))
+```
+
+The Sale Condition as expected was Normal for most of the houses and thus shall be ignored.
+
+
+```{r}
+#Subsetting data to features of interest
+housing_interest=subset(x = housing, select = c("FinBsmt", "LivAreaCat", 
+                                                "LivOrRec", "LotAreaCat", 
+                                                "TotalBaths", "GrLivArea",
+                                                "LotFrontage", "LotShape",
+                                                "LotConfig","Neighborhood",
+                                                "BldgType", "OverallQual",
+                                                "OverallCond", "YearBuilt",
+                                                "YearRemodAdd", "Exterior1st",
+                                                "Exterior2nd", "ExterQual",
+                                                "ExterCond", "Foundation", 
+                                                "BsmtQual", "BsmtCond", 
+                                                "TotalBsmtSF", "Heating",
+                                                "HeatingQC", "CentralAir",
+                                                "Electrical", "BedroomAbvGr",
+                                                "KitchenAbvGr", "KitchenQual",
+                                                "TotRmsAbvGrd", "Fireplaces",
+                                                "GarageType", "GarageYrBlt",
+                                                "GarageFinish", "GarageCars",
+                                                "GarageArea", "MoSold", 
+                                                "YrSold", "SalePrice"))
+```
+
+---------------------------------------------------------------------------
+
+# Univariate Analysis
+### What is the structure of your dataset?
+There are 1,460 houses in the dataset with 81 features. I focused on 39 features (5 of which were derived). The OverallQual and OverallCond variables can be considered as ordered factor variables with the 1 being the worst and 10 being the best.
+Other observations:
+  * The median sale price is $163,000 and the maximum price is $755,000. Looking at the distribution, I log-transformed the sale price. 
+  * The lot area variable was categorized and most houses had a lot area between 5000 and 10000 square feet. The distribution of lot frontage was right tailed. Some lots were irregular in shape, while most of the configuration of the property were inside lots.
+  * North Ames neighbourhood had the most number of sales during the period. 
+  * Most of the houses sold were single family homes. Townhomes were either end or inside unit. 
+  * Most of the houses had an Overall Quality of 5 and 50% of the houses were in the range of 5 to 7. 
+  The Overall Condition of the houses had a peak at 5. 
+  Most sales seem to have happened during the summer months of June and July. 
+  The data is incomplete for 2010. 
+  I also note that this data may not be real, as in 2008 the real estate is known to have crashed and did not really gain before 2010. This does not show up in the graphs for the number of houses sold during that period. I wonder if it will be obvious when compared to the sale prices during that time 
+  The data looks mainly at 2000 to 2005 built houses. 
+  The square footage of the houses sold were binned in to 5 different categories. Most of the houses sold were in the 1500 to 2000 square feet range.
+  The number of cars in the garage that could be accommodated varied from 0 to 4 cars and the area of the garage from 0 to almost 1500 square feet. I also note the garages might have been built on a later date and may not be completely finished. There is not much variation in the garage type but whether it was attached or detached could affect sale prices.
+  Interestingly some houses had more than one kitchen and their qualities varied.
+  The number of bedrooms above grade ranged between 0 to 8, while the total number of rooms above grade varied from 2 to 14.
+  A new variable with the total number of bathrooms were computed and ranged from 1 to 6.
+  Most houses had central air conditioning but it would be interesting its effect on sale price. The electrical system and the type of heating varied probably based on the year remodeled. Since the heating quality varied, I wonder if it affects the sale price especially if sold in the winter months.
+  Two new variables were compiled from the basement variables. FinBsmt records whether the basement was finished or not and LivOrRec variable records whether the basement is living quarters or a recreation room or both. The total basement square footage ranged from 0 to 6000 square feet. There was some variability in basement quality and condition.
+  The top two main foundation of the houses sold were poured concrete and cinder block.
+  Exterior Quality and Condition were mostly typical / average.
+  Most houses had vinyl siding  but could also have had wood siding, cement board, metal siding or plywood.
+
+### What is/are the main feature(s) of interest in your dataset?
+The main features in the data set are square footage and sale price. I wonder which other features will contribute for predicting the sale price of the house. I believe it will be a combination of the features that can be used to build a predictive model to sale price of houses.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+I think square footage, month sold, year sold, neighborhood, year remodelled, overall quality, overall condition, garage type and building type will help determine the sale price of the house sold. 
+
+### Did you create any new variables from existing variables in the dataset?
+I created a few new variables from existing variables - 
+  1) TotalBaths - The total number of baths.
+  2) LotAreaCat - categorised lot area
+  3) LivAreaCat - categorised square footage
+  4) FinBsmt - basement finish
+  5) LivOrRec - Living Quaters or Recreation room in the basement.
+
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+I found the sale price had a skewed distribution and to tidy it I carried out a log transformation.  The sale price data now follows a normal distribution. I also subsetted the data to only include the features of interest and the unique identifier for each house sold.
+
+
+# Bivariate Plots Section
+
+```{r}
+#ordering the categorical variables to compare with SalePrice
+housing_interest$LogSalePrice <- log10(housing_interest$SalePrice)
+housing_interest$FinBsmt<-factor(housing_interest$FinBsmt, ordered = T)
+housing_interest$LivAreaCat<-factor(housing_interest$LivAreaCat, ordered = T)
+housing_interest$LotAreaCat<-factor(housing_interest$LivAreaCat, ordered = T)
+housing_interest$ExterQual <- factor(housing_interest$ExterQual, 
+                                     levels = c("Po","Fa","TA","Gd","Ex"),
+                                     ordered = T)
+housing_interest$ExterCond <- factor(housing_interest$ExterCond,
+                                     levels = c("Po","Fa","TA","Gd","Ex"),
+                                     ordered = T)
+housing_interest$BsmtQual<-factor(housing_interest$BsmtQual,
+                                  levels = c("NA","Po","Fa","TA","Gd","Ex"),
+                                  ordered = T)
+housing_interest$BsmtCond<-factor(housing_interest$BsmtCond,
+                                  levels = c("NA","Po","Fa","TA","Gd","Ex"),
+                                  ordered = T)
+housing_interest$HeatingQC<-factor(housing_interest$HeatingQC,
+                                   levels = c("Po","Fa","TA","Gd","Ex"),
+                                   ordered = T)
+housing_interest$KitchenQual<-factor(housing_interest$KitchenQual,
+                                     levels = c("Po","Fa","TA","Gd","Ex"), 
+                                     ordered = T)
+housing_interest$GarageFinish<-factor(housing_interest$GarageFinish,
+                                      levels = c("NA","Unf","RFn","Fin"),
+                                      ordered = T)
+housing_interest$CentralAir<-factor(housing_interest$CentralAir,ordered = T)
+
+```
+
+
+## Correlations with SalePrice
+In an effort to look at the effect of the variables of interest (which had an inherent logical order) on Sale Price, I did 3 matrix plots as below. I used the correlations of values greater than 0.6 to be considered further.
+
+### plot 1
+```{r}
+library(psych)
+pairs.panels(housing_interest[,c("LogSalePrice", "FinBsmt", "LivAreaCat",
+                                 "LotAreaCat", "TotalBaths", "LotFrontage",
+                                 "OverallQual", "OverallCond", "YearBuilt",
+                                 "YearRemodAdd")], lm=TRUE, pch=16,
+             hist.col="darkslateblue", cex.cor=1.5)
+```
+
+In this plot the most intersting correlations were bewteen log10(SalePrice) and other features such as OverallQual(0.82), TotalBaths(0.67), LotAreaCat(0.69) and LivAreaCat(0.69). LivAreaCat and LotAreaCat had a correlation of 1 but this is not suprising. I had expected some correlation between OverallQual and OverallCond but this was not the case. Similarly, the correlation between SalePrice and YearBuilt or YearRemodAdd were only 0.59 and 0.57 respectvely and a correlation of 0.59 between them.
+
+### plot 2
+```{r}
+pairs.panels(housing_interest[,c("LogSalePrice", "ExterQual", "ExterCond", 
+                                 "BsmtQual",  "BsmtCond", "TotalBsmtSF",
+                                 "HeatingQC", "CentralAir", "BedroomAbvGr", 
+                                 "KitchenAbvGr")], lm=TRUE, pch=16, 
+             hist.col="darkslateblue", cex.cor=1.5)
+```
+
+In this plot, there is a correlation of 0.68, 0.65 and 0.61 for ExterQual, 
+BsmtQual and TotBsmtSqft respectively with log10(SalePrice). Also to note there was a correlation of 0.64 between ExterQual and BsmtQual.Interstingly, the correlation between TotRmsAbvGrd and log10(SalePrice) was negligible.
+
+### plot 3
+```{r}
+pairs.panels(housing_interest[,c("LogSalePrice", "KitchenQual", "TotRmsAbvGrd", 
+                                 "Fireplaces", "GarageYrBlt", "GarageFinish", 
+                                 "GarageCars", "GarageArea", "MoSold", "YrSold"
+                                 )],lm=TRUE, pch=16, hist.col="darkslateblue",
+             cex.cor=1.5)
+```
+
+In this plot, there is a correlation of 0.67, 0.68 and 0.65 for KitchenQual, GarageCars and GarageArea with log10(SalePrice). Also to note there is an expected high correlation of 0.88 between GarageCars and GarageArea. Interestingly, the TotRmsAbvGrade has only a correlation of 0.53 with log10(SalePrice). It also seems that the month and year for the sale has no effect on price. The GarageYrBlt (though minimal) seem to have had some influence on GarageFinish (0.53), GarageCars (0.59) and GarageArea (0.56). 
+
+### Follow-up of intervariable 
+Since most of the quality features had a high correlation with SalePrice, I thought it was important to look at the correlations between these variables.
+```{r}
+pairs.panels(housing_interest[,c("OverallQual", "ExterQual", 
+                                 "KitchenQual", "BsmtQual")], pch=16, 
+             hist.col="darkslateblue", cex.cor=1.5)
+```
+
+This plot shows that all the quality variables are corrlated at a correlation coefficient > 0.65. This makes me wonder if OverallQual explain most of the variation in SalePrice.
+
+
+Similarly, I decided to look at the features that look at the area for the houses sold.
+```{r}
+pairs.panels(housing_interest[,c("LotAreaCat", "LivAreaCat", "TotalBsmtSF",
+                                 "GarageArea")], pch=16, 
+             hist.col="darkslateblue", cex.cor=1.5)
+```
+
+This plots shows that not all the 'area' features are as correlated as the 'quality' features except LotAreaCat and LivAreaCat that we had noted before.
+
+The last one I wanted to look at was the correlation between TotalBaths, GarageCars, TotRmsAbvGrade, LivAreaCat.
+```{r}
+pairs.panels(housing_interest[,c("TotalBaths", "TotRmsAbvGrd", "GarageCars",
+                                 "LivAreaCat")], pch=16, 
+             hist.col="darkslateblue", cex.cor=1.5)
+```
+
+I had expected a higher coorelation than 0.46 between TotalBaths and TotRmsAbvGrade. There is a high corrlation between LivAreaCat and TotRmsAbvGrade as expected.
+
+### other categorical variables
+For the other categorical variables I looked at boxplots ordered on median sale price for each category of each variable.
+```{r}
+factorcols<-c("LivOrRec", "LotShape", "LotConfig", "Neighborhood", "BldgType",
+              "Exterior1st", "Exterior2nd", "Foundation","Heating","Electrical",
+              "GarageType")
+
+for (i in 1:length(factorcols))
+{
+  print(ggplot(aes(y=SalePrice, x=reorder(as.factor(eval(parse(text= 
+                                                                 factorcols[i]
+                                                               ))), SalePrice,
+                                          median)), data=housing_interest) +
+          geom_boxplot() +
+          scale_y_log10()+ 
+          xlab(factorcols[i]) +
+          ylab("SalePrice")+
+          geom_hline(yintercept = median(housing_interest$SalePrice), col="red", lty="dashed", lwd=1) +
+  theme(axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90)))
+
+}
+```
+
+In the above boxplots, each feature was sorted for median SalePrice of each category of the feature and plotted. The median SalePrice was also plotted as a red dashed line.
+
+The features, LivOrRec, LotShape, LotConfig, BldgType, Exterior1st, Exterior2nd, Foundation, Heating and Electrical seem to have no significant effect on SalePrice. Thus I won't be considering this further.
+
+As expected, Neighborhood has an effect on SalePrice. Also to note, houses with Builtin & Attached Garages had higher SalePrice compared to the rest. 
+
+
+## A closer look at the highest correlation (0.82)
+I decided to extract the coefficients of a linear model of LogSalePrice ~ OverallQual and plot it again.
+```{r}
+m1 <-  lm(LogSalePrice~OverallQual,data=housing_interest)
+print(summary(m1))
+```
+
+```{r}
+ggplot(aes(y=SalePrice,x=as.factor(OverallQual)),data=housing_interest)+
+  scale_y_log10()+
+  geom_jitter(alpha=0.3)+
+  geom_abline(intercept=coef(m1)["(Intercept)"], slope=coef(m1)["OverallQual"],
+              lwd=1.2, col="red", lty="dashed") +
+  ggtitle("Overall Quality versus Sale Price (log)") +
+  xlab("Overall Quality") +
+  ylab("Sale Price ($)") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"), 
+        panel.background = element_rect(fill = "white"), axis.line 
+        =element_line(colour="black"))
+```
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+The highest correlation with log10(sale price) of 0.82 was with OverallQual. This was followed by ExterQual (0.68), LivAreaCat (0.69), LotAreaCat (0.69), KitchenQual (0.67), BsmtQual (0.65), GarageCars (0.68), TotalBaths (0.67) , GarageArea (0.65) and TotBsmtSqft (0.61). But it was important to note that they are not all are    independent and have some correlation between them like LivAreaCat and LotAreaCat are completely correlated with a correlation coefficient of 1. Neighborhood has an upward trend on SalePrice. Also to note, houses with Builtin & Attached Garages had higher SalePrice compared to the rest.
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+There was no correlation between OverallCond and OverallQual. All the quality variables are correlated with a correlation coefficient > 0.65. This makes me wonder if OverallQual explain most of the variation in SalePrice.  The GarageYrBlt (though minimal) seem to have had some influence on GarageFinish (0.51), GarageCars (0.59) and GarageArea (0.56). The correlation between BedroomAbvGr and SalePrice was negligible. The month and year the houses were sold had no effect on the SalePrice.
+
+### What was the strongest relationship you found?
+The strongest relationship for SalePrice was with OverallQual of the houses.
+
+# Multivariate Plots Section
+In this section, I wanted to explore at least a few of the effects of the various features together and a few others.
+
+## Month/Year of sale
+```{r}
+library(RColorBrewer)
+colourCount = length(unique(housing_interest$MoSold))
+getPalette = colorRampPalette(brewer.pal(9, "RdYlGn"))
+
+ggplot(aes(x=YrSold,y=SalePrice, col=as.factor(MoSold)), 
+       data=housing_interest) +
+  scale_y_log10()+
+  scale_color_manual(values = getPalette(12)) +
+  geom_jitter(position="jitter",alpha=0.8) +
+  geom_smooth(stat = "summary", fun.y=median, col="red",lwd=1.5, lty='solid') +
+  xlab("Year Sold") +
+  ylab("Sale Price")+
+  ggtitle("Year Sold versus Sale Price (log transformed)") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+```
+
+This plot shows that the median SalePrice was not affected by the Year or Month of Sale. This is surprising as it is known that
+
+## OverallQual, SalePrice and LivAreaCat
+To begin exploring the total living area and overall quality with sale price, I plotted these three features.
+```{r}
+ggplot(aes(col=LivAreaCat,y=SalePrice,x=OverallQual),data=housing_interest)+
+  geom_jitter(alpha=0.5) +
+  scale_y_log10()+
+  scale_color_brewer(type="qual",palette = "Set1",direction = -1)+
+  xlab("Overall Quality") + 
+  ylab("Sale Price") +
+  ggtitle("OverallQuality vs SalePrice categorised by LivingAreaCategory")+
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"))
+
+```
+
+This plot clearly shows an increase in LogSalePrice with Overall Quality and Living Area Caetgory. It also shows that smaller the area of the house, the lower the quality as well.
+
+I created the next plot in an effort to look at whether there was any effect of remodelling on overall quality, sale price for each neighborhood. 
+```{r}
+housing_interest$Remodelled=
+  (housing_interest$YearBuilt==housing_interest$YearRemodAdd)
+
+colourCount=length(unique(housing_interest$OverallQual))
+getPalette=colorRampPalette(brewer.pal(9,"YlOrRd"))
+
+ggplot(aes(y=SalePrice/GrLivArea, x=reorder(Neighborhood, (SalePrice/GrLivArea),
+                                            median)), data=housing_interest)+
+  geom_jitter(aes(fill=as.factor(OverallQual),col=Remodelled), pch=21, size=2,
+              alpha=0.5) +
+  ggtitle("Effect of Overall Quality, Remodelling, 
+          Neighborhood \n on Sale Price / Square Foot") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90),
+        panel.background = element_rect(fill="white"),
+        legend.key = element_rect(fill="white")) +
+  xlab("Neighborhood")+
+  ylab("SalePrice/SquareFoot")+
+  scale_fill_manual(values=getPalette(colourCount)) +
+  scale_color_manual(values = c("plum2","slateblue4")) +
+  guides(col=guide_legend(order=1, title = "Remodelled",
+                          title.position = "left"), 
+         fill=guide_legend(order=2,title="Overall Quality",
+                           title.position = "left")) 
+  
+```
+
+In this plot, it is obvious that the sale price / square foot was not affected by remodelling. The effect of the overall quality and sale price / square foot in each neighborhood can be clearly seen in this plot.
+
+
+In the next plot, I looked at the effect of Sale Price per Square foot of garage area, depending on garage type and coloured based on the garage finish.
+```{r}
+ggplot(aes(y=SalePrice, x=GarageType),data=subset(housing_interest, is.na(housing_interest$GarageType)!=TRUE))+
+  geom_jitter(aes(col=GarageFinish, shape=as.factor(GarageCars), 
+                  size=GarageArea),alpha=0.5) +
+  scale_y_log10()+
+  xlab("Garage Type")+
+  ylab("SalePrice")+
+  scale_color_brewer(type='qual', palette = "Dark2",direction =1) +
+  ggtitle("")+
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+```
+
+In this plot, there is no correlation between Sale Price and area, type of Garage or Finish of Garage. However there seems to a pattern that most detached garages are unfinished.
+
+In the next plot, I wanted to look at the relationships between Overall Quality to the other qualities.
+```{r}
+ggplot(aes(y=OverallQual,x=ExterQual),
+       data=subset(housing_interest,is.na(housing_interest$BsmtQual)!=TRUE))+
+  geom_jitter(aes(col=KitchenQual,shape=BsmtQual),alpha=0.5)+
+  xlab("External Quality")+
+  ylab("Overall Quality")+
+  scale_color_brewer(type='qual', palette = "Set1",direction = 1) +
+  ggtitle("")+
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+```
+
+The plot shows the correlations between the quality variables. The overall quality was higher as expected when all External, Kitchen and Basement Quality were towards Excellent. 
+
+```{r}
+ggplot(aes(y=SalePrice,x=OverallQual),data=housing_interest)+
+  geom_jitter(aes(col=TotRmsAbvGrd/14, size=TotalBaths), alpha=0.5)+
+  scale_y_log10()+
+  xlab("Overall Quality")+
+  ylab("SalePrice")+
+  scale_color_gradient(low = "black",high = "red") +
+  guides(size =guide_legend(order=1,title = "Total Baths",
+                            title.position = "left"),
+         col = guide_colorbar(order=2, 
+                              title = "Total Rooms \n Above Grade",
+                              title.position = "left")) +
+  ggtitle("")+
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90))
+
+```
+
+In this plot I looked at the sale price in terms of overall quality, total baths and total rooms above grade. There is a clear increase in quality, total baths and rooms above grade with the sale price with exceptions.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+The living area also determined quality and sale price. This was obvious in the first plot that looked at overall quality versus sale price for each living area category and in the last plot that considered the total baths and total rooms above grade.
+
+The neighborhood had an effect on the sale price but it didn't matter if the house was remodelled or not. The neighborhood Northridge Heights (NridgHt) had the highest sale price /square foot but also the best quality houses. While at the other end was the South & West of Iowa State University (SWISU) neighborhood with low quality houses at the lowest sale price / square foot.
+
+The correlations between the quality variables could easily been seen in the second last plot.
+
+### Were there any interesting or surprising interactions between features?
+The garage variables did not seem to have much effect on the sale price.
+
+# Final Plots and Summary
+### Plot One
+```{r echo=FALSE, Plot_One}
+options(scipen=999)
+
+ggplot(aes(SalePrice),data=housing) +
+  geom_histogram(binwidth = 0.05,fill="darkslateblue",col="black") +
+  scale_x_continuous(breaks=seq(0,500000,by=100000), trans="log10") +
+  xlab("Sale Price in Dollars") +
+  ylab("Count") +
+  ggtitle("Distribution of log transformed Sale Price") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90), 
+        panel.background = element_rect(fill="white")) 
+
+```
+
+### Description One
+The distribution of the sale price of the houses sold on log scale appears to be almost normal. The price ranges from $34,900 to $755,000.
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+ggplot(aes(y=SalePrice,x=as.factor(OverallQual)),data=housing_interest)+
+  scale_y_log10()+
+  geom_jitter(alpha=0.3)+
+  geom_abline(intercept=coef(m1)["(Intercept)"], slope=coef(m1)["OverallQual"],
+              lwd=1.2, col="red", lty="dashed") +
+  ggtitle("Overall Quality versus Sale Price (log)") +
+  xlab("Overall Quality") +
+  ylab("Sale Price ($)") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        panel.background = element_rect(fill = "white"), 
+        axis.line = element_line(colour = "black"))
+```
+
+### Description Two
+The feature "OverallQual" had the highest Pearson correlation of 0.82 with Sale Price in log scale. This plot show the line of linear regression model between Overall Quality and Sale Price. 
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+colourCount=length(unique(housing_interest$OverallQual))
+getPalette=colorRampPalette(brewer.pal(9,"YlOrRd"))
+
+ggplot(aes(y=SalePrice/GrLivArea, x=reorder(Neighborhood, (SalePrice/GrLivArea),
+                                            median)), data=housing_interest)+
+  geom_jitter(aes(fill=as.factor(OverallQual),col=Remodelled), pch=21, size=2,
+              alpha=0.5) +
+  ggtitle("Effect of Overall Quality, Remodelling, 
+          Neighborhood \n on Sale Price / Square Foot") +
+  theme(plot.title = element_text(family = "serif",face ="bold.italic"),
+        axis.text.x=element_text(hjust=1, vjust=0.5,angle = 90),
+        panel.background = element_rect(fill="white"),
+        legend.key = element_rect(fill="white")) +
+  xlab("Neighborhood")+
+  ylab("SalePrice/SquareFoot ($/sq. ft.)")+
+  scale_fill_manual(values=getPalette(colourCount)) +
+  scale_color_manual(values = c("plum2","slateblue4")) +
+  guides(col=guide_legend(order=1, title = "Remodelled",title.position = "left") ,fill=guide_legend(order=2,title="Overall Quality", title.position = "left")) 
+```
+
+### Description Three
+The effect of Neighborhood and Overall Quality on Sale Price/Square Foot is summarised well in this plot. In addition, I observed that there was no effect on SalePrice according to whether the houses were remodelled or not. 
+------
+  
+# Reflection
+  
+  This housing data set had 1460 houses and 81 features including "id". I began by exploring all the 80 features (excluding Id). My main feature of interest was Sale Price. The data set looks at houses sold between 2006 and 2010 in Iowa. 
+  
+  I struggled with the number of features and filtering them. I was extremely surprised that the SalePrice was not affected depending on the Year it was sold. It is known that the US housing market went through a major recession in 2008[1]. Thus, the dataset could be fictional. 
+  
+  However, with the data I looked at, Overall Quality of the house, the living area square footage and the neighborhood of the houses were major driving factors for the sale price. This resonates with all the main ingredients that a buyer would consider.
+  
+  I didn't create a linear model because the dataset had only 1460 houses information and too many features to consider. Also due to the fact that many of them were correlated.
+  
+  This dataset could be further explored for all the intercorrelations between the features (which I just touched upon) and how much they actually affect the Sale Price.
+  
+  
+  [1] https://en.wikipedia.org/wiki/Timeline_of_the_United_States_housing_bubble
+  
+# Appendix
+
+MSSubClass: Identifies the type of dwelling involved in the sale.	
+
+        20	1-STORY 1946 & NEWER ALL STYLES
+        30	1-STORY 1945 & OLDER
+        40	1-STORY W/FINISHED ATTIC ALL AGES
+        45	1-1/2 STORY - UNFINISHED ALL AGES
+        50	1-1/2 STORY FINISHED ALL AGES
+        60	2-STORY 1946 & NEWER
+        70	2-STORY 1945 & OLDER
+        75	2-1/2 STORY ALL AGES
+        80	SPLIT OR MULTI-LEVEL
+        85	SPLIT FOYER
+        90	DUPLEX - ALL STYLES AND AGES
+       120	1-STORY PUD (Planned Unit Development) - 1946 & NEWER
+       150	1-1/2 STORY PUD - ALL AGES
+       160	2-STORY PUD - 1946 & NEWER
+       180	PUD - MULTILEVEL - INCL SPLIT LEV/FOYER
+       190	2 FAMILY CONVERSION - ALL STYLES AND AGES
+
+MSZoning: Identifies the general zoning classification of the sale.
+		
+       A	Agriculture
+       C	Commercial
+       FV	Floating Village Residential
+       I	Industrial
+       RH	Residential High Density
+       RL	Residential Low Density
+       RP	Residential Low Density Park 
+       RM	Residential Medium Density
+	
+LotFrontage: Linear feet of street connected to property
+
+LotArea: Lot size in square feet
+
+Street: Type of road access to property
+
+       Grvl	Gravel	
+       Pave	Paved
+       	
+Alley: Type of alley access to property
+
+       Grvl	Gravel
+       Pave	Paved
+       NA 	No alley access
+		
+LotShape: General shape of property
+
+       Reg	Regular	
+       IR1	Slightly irregular
+       IR2	Moderately Irregular
+       IR3	Irregular
+       
+LandContour: Flatness of the property
+
+       Lvl	Near Flat/Level	
+       Bnk	Banked - Quick and significant rise from street grade to building
+       HLS	Hillside - Significant slope from side to side
+       Low	Depression
+		
+Utilities: Type of utilities available
+		
+       AllPub	All public Utilities (E,G,W,& S)	
+       NoSewr	Electricity, Gas, and Water (Septic Tank)
+       NoSeWa	Electricity and Gas Only
+       ELO	Electricity only	
+	
+LotConfig: Lot configuration
+
+       Inside	Inside lot
+       Corner	Corner lot
+       CulDSac	Cul-de-sac
+       FR2	Frontage on 2 sides of property
+       FR3	Frontage on 3 sides of property
+	
+LandSlope: Slope of property
+		
+       Gtl	Gentle slope
+       Mod	Moderate Slope	
+       Sev	Severe Slope
+	
+Neighborhood: Physical locations within Ames city limits
+
+       Blmngtn	Bloomington Heights
+       Blueste	Bluestem
+       BrDale	Briardale
+       BrkSide	Brookside
+       ClearCr	Clear Creek
+       CollgCr	College Creek
+       Crawfor	Crawford
+       Edwards	Edwards
+       Gilbert	Gilbert
+       IDOTRR	Iowa DOT and Rail Road
+       MeadowV	Meadow Village
+       Mitchel	Mitchell
+       Names	North Ames
+       NoRidge	Northridge
+       NPkVill	Northpark Villa
+       NridgHt	Northridge Heights
+       NWAmes	Northwest Ames
+       OldTown	Old Town
+       SWISU	South & West of Iowa State University
+       Sawyer	Sawyer
+       SawyerW	Sawyer West
+       Somerst	Somerset
+       StoneBr	Stone Brook
+       Timber	Timberland
+       Veenker	Veenker
+			
+Condition1: Proximity to various conditions
+	
+       Artery	Adjacent to arterial street
+       Feedr	Adjacent to feeder street	
+       Norm	Normal	
+       RRNn	Within 200' of North-South Railroad
+       RRAn	Adjacent to North-South Railroad
+       PosN	Near positive off-site feature--park, greenbelt, etc.
+       PosA	Adjacent to postive off-site feature
+       RRNe	Within 200' of East-West Railroad
+       RRAe	Adjacent to East-West Railroad
+	
+Condition2: Proximity to various conditions (if more than one is present)
+		
+       Artery	Adjacent to arterial street
+       Feedr	Adjacent to feeder street	
+       Norm	Normal	
+       RRNn	Within 200' of North-South Railroad
+       RRAn	Adjacent to North-South Railroad
+       PosN	Near positive off-site feature--park, greenbelt, etc.
+       PosA	Adjacent to postive off-site feature
+       RRNe	Within 200' of East-West Railroad
+       RRAe	Adjacent to East-West Railroad
+	
+BldgType: Type of dwelling
+		
+       1Fam	Single-family Detached	
+       2FmCon	Two-family Conversion; originally built as one-family dwelling
+       Duplx	Duplex
+       TwnhsE	Townhouse End Unit
+       TwnhsI	Townhouse Inside Unit
+	
+HouseStyle: Style of dwelling
+	
+       1Story	One story
+       1.5Fin	One and one-half story: 2nd level finished
+       1.5Unf	One and one-half story: 2nd level unfinished
+       2Story	Two story
+       2.5Fin	Two and one-half story: 2nd level finished
+       2.5Unf	Two and one-half story: 2nd level unfinished
+       SFoyer	Split Foyer
+       SLvl	Split Level
+	
+OverallQual: Rates the overall material and finish of the house
+
+       10	Very Excellent
+       9	Excellent
+       8	Very Good
+       7	Good
+       6	Above Average
+       5	Average
+       4	Below Average
+       3	Fair
+       2	Poor
+       1	Very Poor
+	
+OverallCond: Rates the overall condition of the house
+
+       10	Very Excellent
+       9	Excellent
+       8	Very Good
+       7	Good
+       6	Above Average	
+       5	Average
+       4	Below Average	
+       3	Fair
+       2	Poor
+       1	Very Poor
+		
+YearBuilt: Original construction date
+
+YearRemodAdd: Remodel date (same as construction date if no remodeling or additions)
+
+RoofStyle: Type of roof
+
+       Flat	Flat
+       Gable	Gable
+       Gambrel	Gabrel (Barn)
+       Hip	Hip
+       Mansard	Mansard
+       Shed	Shed
+		
+RoofMatl: Roof material
+
+       ClyTile	Clay or Tile
+       CompShg	Standard (Composite) Shingle
+       Membran	Membrane
+       Metal	Metal
+       Roll	Roll
+       Tar&Grv	Gravel & Tar
+       WdShake	Wood Shakes
+       WdShngl	Wood Shingles
+		
+Exterior1st: Exterior covering on house
+
+       AsbShng	Asbestos Shingles
+       AsphShn	Asphalt Shingles
+       BrkComm	Brick Common
+       BrkFace	Brick Face
+       CBlock	Cinder Block
+       CemntBd	Cement Board
+       HdBoard	Hard Board
+       ImStucc	Imitation Stucco
+       MetalSd	Metal Siding
+       Other	Other
+       Plywood	Plywood
+       PreCast	PreCast	
+       Stone	Stone
+       Stucco	Stucco
+       VinylSd	Vinyl Siding
+       Wd Sdng	Wood Siding
+       WdShing	Wood Shingles
+	
+Exterior2nd: Exterior covering on house (if more than one material)
+
+       AsbShng	Asbestos Shingles
+       AsphShn	Asphalt Shingles
+       BrkComm	Brick Common
+       BrkFace	Brick Face
+       CBlock	Cinder Block
+       CemntBd	Cement Board
+       HdBoard	Hard Board
+       ImStucc	Imitation Stucco
+       MetalSd	Metal Siding
+       Other	Other
+       Plywood	Plywood
+       PreCast	PreCast
+       Stone	Stone
+       Stucco	Stucco
+       VinylSd	Vinyl Siding
+       Wd Sdng	Wood Siding
+       WdShing	Wood Shingles
+	
+MasVnrType: Masonry veneer type
+
+       BrkCmn	Brick Common
+       BrkFace	Brick Face
+       CBlock	Cinder Block
+       None	None
+       Stone	Stone
+	
+MasVnrArea: Masonry veneer area in square feet
+
+ExterQual: Evaluates the quality of the material on the exterior 
+		
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       Po	Poor
+		
+ExterCond: Evaluates the present condition of the material on the exterior
+		
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       Po	Poor
+		
+Foundation: Type of foundation
+		
+       BrkTil	Brick & Tile
+       CBlock	Cinder Block
+       PConc	Poured Contrete	
+       Slab	Slab
+       Stone	Stone
+       Wood	Wood
+		
+BsmtQual: Evaluates the height of the basement
+
+       Ex	Excellent (100+ inches)	
+       Gd	Good (90-99 inches)
+       TA	Typical (80-89 inches)
+       Fa	Fair (70-79 inches)
+       Po	Poor (<70 inches
+       NA	No Basement
+		
+BsmtCond: Evaluates the general condition of the basement
+
+       Ex	Excellent
+       Gd	Good
+       TA	Typical - slight dampness allowed
+       Fa	Fair - dampness or some cracking or settling
+       Po	Poor - Severe cracking, settling, or wetness
+       NA	No Basement
+	
+BsmtExposure: Refers to walkout or garden level walls
+
+       Gd	Good Exposure
+       Av	Average Exposure (split levels or foyers typically score average or above)	
+       Mn	Mimimum Exposure
+       No	No Exposure
+       NA	No Basement
+	
+BsmtFinType1: Rating of basement finished area
+
+       GLQ	Good Living Quarters
+       ALQ	Average Living Quarters
+       BLQ	Below Average Living Quarters	
+       Rec	Average Rec Room
+       LwQ	Low Quality
+       Unf	Unfinshed
+       NA	No Basement
+		
+BsmtFinSF1: Type 1 finished square feet
+
+BsmtFinType2: Rating of basement finished area (if multiple types)
+
+       GLQ	Good Living Quarters
+       ALQ	Average Living Quarters
+       BLQ	Below Average Living Quarters	
+       Rec	Average Rec Room
+       LwQ	Low Quality
+       Unf	Unfinshed
+       NA	No Basement
+
+BsmtFinSF2: Type 2 finished square feet
+
+BsmtUnfSF: Unfinished square feet of basement area
+
+TotalBsmtSF: Total square feet of basement area
+
+Heating: Type of heating
+		
+       Floor	Floor Furnace
+       GasA	Gas forced warm air furnace
+       GasW	Gas hot water or steam heat
+       Grav	Gravity furnace	
+       OthW	Hot water or steam heat other than gas
+       Wall	Wall furnace
+		
+HeatingQC: Heating quality and condition
+
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       Po	Poor
+		
+CentralAir: Central air conditioning
+
+       N	No
+       Y	Yes
+		
+Electrical: Electrical system
+
+       SBrkr	Standard Circuit Breakers & Romex
+       FuseA	Fuse Box over 60 AMP and all Romex wiring (Average)	
+       FuseF	60 AMP Fuse Box and mostly Romex wiring (Fair)
+       FuseP	60 AMP Fuse Box and mostly knob & tube wiring (poor)
+       Mix	Mixed
+		
+1stFlrSF: First Floor square feet
+ 
+2ndFlrSF: Second floor square feet
+
+LowQualFinSF: Low quality finished square feet (all floors)
+
+GrLivArea: Above grade (ground) living area square feet
+
+BsmtFullBath: Basement full bathrooms
+
+BsmtHalfBath: Basement half bathrooms
+
+FullBath: Full bathrooms above grade
+
+HalfBath: Half baths above grade
+
+Bedroom: Bedrooms above grade (does NOT include basement bedrooms)
+
+Kitchen: Kitchens above grade
+
+KitchenQual: Kitchen quality
+
+       Ex	Excellent
+       Gd	Good
+       TA	Typical/Average
+       Fa	Fair
+       Po	Poor
+       	
+TotRmsAbvGrd: Total rooms above grade (does not include bathrooms)
+
+Functional: Home functionality (Assume typical unless deductions are warranted)
+
+       Typ	Typical Functionality
+       Min1	Minor Deductions 1
+       Min2	Minor Deductions 2
+       Mod	Moderate Deductions
+       Maj1	Major Deductions 1
+       Maj2	Major Deductions 2
+       Sev	Severely Damaged
+       Sal	Salvage only
+		
+Fireplaces: Number of fireplaces
+
+FireplaceQu: Fireplace quality
+
+       Ex	Excellent - Exceptional Masonry Fireplace
+       Gd	Good - Masonry Fireplace in main level
+       TA	Average - Prefabricated Fireplace in main living area or Masonry Fireplace in basement
+       Fa	Fair - Prefabricated Fireplace in basement
+       Po	Poor - Ben Franklin Stove
+       NA	No Fireplace
+		
+GarageType: Garage location
+		
+       2Types	More than one type of garage
+       Attchd	Attached to home
+       Basment	Basement Garage
+       BuiltIn	Built-In (Garage part of house - typically has room above garage)
+       CarPort	Car Port
+       Detchd	Detached from home
+       NA	No Garage
+		
+GarageYrBlt: Year garage was built
+		
+GarageFinish: Interior finish of the garage
+
+       Fin	Finished
+       RFn	Rough Finished	
+       Unf	Unfinished
+       NA	No Garage
+		
+GarageCars: Size of garage in car capacity
+
+GarageArea: Size of garage in square feet
+
+GarageQual: Garage quality
+
+       Ex	Excellent
+       Gd	Good
+       TA	Typical/Average
+       Fa	Fair
+       Po	Poor
+       NA	No Garage
+		
+GarageCond: Garage condition
+
+       Ex	Excellent
+       Gd	Good
+       TA	Typical/Average
+       Fa	Fair
+       Po	Poor
+       NA	No Garage
+		
+PavedDrive: Paved driveway
+
+       Y	Paved 
+       P	Partial Pavement
+       N	Dirt/Gravel
+		
+WoodDeckSF: Wood deck area in square feet
+
+OpenPorchSF: Open porch area in square feet
+
+EnclosedPorch: Enclosed porch area in square feet
+
+3SsnPorch: Three season porch area in square feet
+
+ScreenPorch: Screen porch area in square feet
+
+PoolArea: Pool area in square feet
+
+PoolQC: Pool quality
+		
+       Ex	Excellent
+       Gd	Good
+       TA	Average/Typical
+       Fa	Fair
+       NA	No Pool
+		
+Fence: Fence quality
+		
+       GdPrv	Good Privacy
+       MnPrv	Minimum Privacy
+       GdWo	Good Wood
+       MnWw	Minimum Wood/Wire
+       NA	No Fence
+	
+MiscFeature: Miscellaneous feature not covered in other categories
+		
+       Elev	Elevator
+       Gar2	2nd Garage (if not described in garage section)
+       Othr	Other
+       Shed	Shed (over 100 SF)
+       TenC	Tennis Court
+       NA	None
+		
+MiscVal: $Value of miscellaneous feature
+
+MoSold: Month Sold (MM)
+
+YrSold: Year Sold (YYYY)
+
+SaleType: Type of sale
+		
+       WD 	Warranty Deed - Conventional
+       CWD	Warranty Deed - Cash
+       VWD	Warranty Deed - VA Loan
+       New	Home just constructed and sold
+       COD	Court Officer Deed/Estate
+       Con	Contract 15% Down payment regular terms
+       ConLw	Contract Low Down payment and low interest
+       ConLI	Contract Low Interest
+       ConLD	Contract Low Down
+       Oth	Other
+		
+SaleCondition: Condition of sale
+
+       Normal	Normal Sale
+       Abnorml	Abnormal Sale -  trade, foreclosure, short sale
+       AdjLand	Adjoining Land Purchase
+       Alloca	Allocation - two linked properties with separate deeds, typically condo with a garage unit	
+       Family	Sale between family members
+       Partial	Home was not completed when last assessed (associated with New Homes)
+  
+  
+

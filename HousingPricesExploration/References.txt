@@ -1,0 +1,5 @@
+Dataset : housing_train.csv was downloaded from https://www.kaggle.com/gpandi007/usa-housing-dataset .
+
+Data description : data_description.txt (or Appendix 1)
+
+[1] https://en.wikipedia.org/wiki/Timeline_of_the_United_States_housing_bubble
