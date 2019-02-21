@@ -13,6 +13,7 @@
         stroke: none;
       }
 
+
       div.hands_buttons {
         position: fixed;
         top: 5px;
@@ -124,8 +125,7 @@
               .call(avg_axis);
 
             // Add y-axis
-            d3.select("svg")
-              .append("g")
+            svg.append("g")
               .attr("class", "y axis")
               .attr("transform", "translate(" + margin + ",0)")
               .call(HR_axis);
@@ -244,7 +244,26 @@
             }
 
 
-            d3.select("svg").selectAll("circle").remove()
+            d3.select("svg").selectAll("circle").remove();
+
+            d3.select("svg").selectAll(".point").remove()
+
+            var avgmean=d3.nest()
+                          .key(function(d) {return d.hand;})
+                          .rollup(function(v) {
+                            return d3.mean(v, function(d) {
+                              if (d.avg>0 & d.HR>0) {return d.avg;}});})
+                          .entries(x);
+
+            var HRmean=d3.nest()
+                          .key(function(d) {return d.hand;})
+                          .rollup(function(v) {
+                            return d3.mean(v, function(d) {
+                              if (d.avg>0 & d.HR>0) {return d.HR;}});})
+                          .entries(x);
+
+
+            var meandata=[{'avg':avgmean[0]['values'],'HR':HRmean[0]['values']}]
 
             var circles=d3.select("svg")
               .selectAll("circle")
@@ -264,6 +283,22 @@
                        else {return 'green'}})
 
             draw_legend();
+            var meanpoint=d3.select('svg')
+                         .selectAll('point')
+                         .data(meandata)
+                         .enter()
+                         .append("path")
+                         .attr("class", "point")
+                         .attr("d", d3.svg.symbol().size(200).type("cross"))
+                         .attr("transform", function(d) {
+                           return "translate(" + avg_scale(d["avg"])+ "," + HR_scale(d["HR"]) + ")";
+                         })
+                         .attr('fill', function() {
+                              if (hand==="R") {return 'blue';}
+                              else if (hand==="L") {return 'red';}
+                              else if (hand==="B"){return 'green'}
+                              else {return 'black';}});
+
 
             circles.on("mouseover", function(d){
               tooltip.text(d.name+", (BMI="+d3.format(".2f")(d.bmi)+")")
@@ -274,6 +309,14 @@
                   .on("mouseout", function(){
                     return tooltip.style("visibility", "hidden");});
 
+             meanpoint.on("mouseover", function(d){
+                      tooltip.text("Mean")
+                      return tooltip.style("visibility", "visible");})
+                           .on("mousemove", function(){
+                             return tooltip.style("top",
+                    (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");})
+                          .on("mouseout", function(){
+                            return tooltip.style("visibility", "hidden");});
             return circles;
           };
 
@@ -288,7 +331,7 @@
             if(hand_idx>(hands.length-1)){
               clearInterval(hand_interval);
 
-              alert("Please click Red buttons (top left) to look at the data.")
+              alert("Cross: indicate mean of group.\nPlease click Red buttons (top left) to look at the data. \nHover on points for names")
 
               var buttons = d3.select('body')
                               .append('div')
